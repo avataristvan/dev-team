@@ -1,0 +1,10 @@
+{
+  "name": "dev-team",
+  "version": "0.1.0",
+  "description": "A small agent team for Claude Code (requires Fabrica): plan in chunks, tech-lead review of the plan, one coder per chunk with its own review-fix loop, tests enforced by a hook, reflect gate between chunks.",
+  "author": {"name": "Istvan Lovas"},
+  "homepage": "https://github.com/avataristvan/dev-team",
+  "repository": "https://github.com/avataristvan/dev-team",
+  "license": "MIT",
+  "keywords": ["claude-code", "agents", "multi-agent", "code-review", "domain-driven-design"]
+}

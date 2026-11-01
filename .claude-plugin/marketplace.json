@@ -1,0 +1,14 @@
+{
+  "name": "dev-team",
+  "owner": {
+    "name": "Istvan Lovas"
+  },
+  "plugins": [
+    {
+      "name": "dev-team",
+      "source": "./",
+      "description": "Plan → Code → Review → Reflect: an agent team that delivers large tasks in reviewed chunks instead of one big bang."
+    }
+  ],
+  "description": "Agent team for chunked, reviewed implementation in Claude Code."
+}
