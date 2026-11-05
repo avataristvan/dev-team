@@ -18,8 +18,9 @@ What helps with human teams helps here too: split the work, have someone else lo
   │             each with scope, model, exit criterion and a self-contained coder prompt
   │           └─ Tech-lead review: a second the-coder reads the plan cold
   │                and names where a coder would have to guess; findings go into the plan
+  │           └─ The plan is a file: docs/plans/<slug>/chunks.md, with a status per chunk
   │
-  ├─ Code     one dev-team:the-coder per chunk (parallel chunks in separate git worktrees)
+  ├─ Code     one dev-team:the-coder per chunk, each in its own git worktree from a checked base
   │           └─ Review: the coder runs dev-team:review on its own diff
   │                (standard code reviewer + anchor check against recorded decisions), fixes or justifies each finding
   │           └─ Test hook: when the coder stops, the project's test command runs; red sends it back once
@@ -48,9 +49,9 @@ The planner runs every exit-criterion grep against the current tree before writi
 - **Review inside each coder.** The coder reviews its own diff with a standard code reviewer before reporting back, and has to list every finding with `applied` or `skipped` plus a reason. The orchestrator audits that list at the reflect gate.
 - **Tests by mechanism, not by habit.** The SubagentStop hook runs the project's test command whenever a coder stops and sends it back once if they are red. A duty that matters belongs in something that enforces it.
 - **Anchor check.** Each chunk carries the recorded decisions that bound it as `anchors`; `fabrica:anchor-lint` checks the diff against each one (held / violated / not applicable). A violated anchor is fixed or reported as blocked, never silently skipped.
-- **Hard stop on contradictions.** If the librarian says a chunk would reverse a recorded decision, the coder builds nothing and reports `blocked: contradicts <id>`; the user decides. Agents that had only been *told* the reason still built and flagged it afterwards.
+- **Hard stop on contradictions.** If the librarian says a chunk would reverse a recorded decision, the coder builds nothing and reports `blocked: contradicts <record path>`; the user decides. Agents that had only been *told* the reason still built and flagged it afterwards.
 
-Some rules come from incidents. In a four-chunk parallel run, one coder ran `git stash` for a "clean baseline" while others were editing the same tree and wiped their work; since then parallel coders get their own git worktree, stateful git commands are forbidden, and only the orchestrator merges.
+Some rules come from incidents. In a four-chunk parallel run, one coder ran `git stash` for a "clean baseline" while others were editing the same tree and wiped their work; since then every coder gets its own git worktree, stateful git commands are forbidden, and only the orchestrator merges. Worktrees branch from origin's default branch unless told otherwise, so a merged but unpushed chunk would be missing from the next one. The orchestrator therefore requires `"worktree": {"baseRef": "head"}` and records each chunk's base commit, and the coder checks it before building.
 
 ## An example
 
@@ -66,17 +67,18 @@ claude plugin install dev-team@dev-team
 ```
 
 Recommended alongside:
-- [`pr-review-toolkit`](https://github.com/anthropics/claude-plugins-official) for its `code-reviewer` agent, the default inner reviewer. Without it, the review step falls back to a general-purpose agent with a review prompt. Change the reviewer in `skills/review/SKILL.md` (`inner_reviewer:`).
+- [`pr-review-toolkit`](https://github.com/anthropics/claude-plugins-official) for its `code-reviewer` agent, the default inner reviewer. Without it, the review step falls back to a general-purpose agent with a review prompt. Change the reviewer in `skills/review/SKILL.md` (the **inner_reviewer** line).
 
 ## Usage
 
 - `/dev-team:dev-team <task>` runs the whole loop.
-- `/dev-team:chunk-plan <task>` only plans (Claude also loads it on its own when you ask for a plan or a breakdown into chunks).
+- `/dev-team:chunk-plan <task>` only plans (Claude also loads it on its own when you ask for a plan or a breakdown into chunks). It writes `docs/plans/<slug>/chunks.md` in the area (the folder with `docs/records/`); `/dev-team:dev-team <slug>` resumes such a plan at its first chunk not yet done.
+- Set `"worktree": {"baseRef": "head"}` in the project's `.claude/settings.json`; the orchestrator spawns no coder without it. A plugin cannot set it for you.
 - Declare your test command in `.claude/test-command` (first non-comment line, e.g. `pytest -q` or `./gradlew test`) to enable the test hook.
 - The hook only runs inside trusted roots: by default the session's project; set `DEV_TEAM_TRUSTED_ROOTS` (paths separated by `:`) to widen it, e.g. to a folder with all your projects. A test command in a repo outside those roots never runs.
 - The hook never runs a command just because a file declares it: a coder can write `.claude/test-command` too. The first time a command appears, and whenever it changes, the hook doesn't run it and shows you the approval call instead (`python3 <plugin>/hooks/coder_tests.py --approve <repo> <sha256>`, which stores the approval only if the command still matches the hash you were shown; without the hash it only shows the command); approvals are stored as hashes in `~/.claude/dev-team/approved-test-commands.json`.
 - What an approval means: the command runs without a permission prompt, unsandboxed, on the code the coder just wrote (that is what running tests is). Approve only commands you would run on that code yourself. Declarations containing control or format characters are refused.
-- Project-specific rules (build commands, platform conventions, gotchas) belong in the project's `CLAUDE.md`; the coder reads them.
+- Project-specific rules (build commands, platform conventions, gotchas) belong in the project's `CLAUDE.md`; the coder reads them but does not write them. New lessons come back as record candidates in its `[retro]`.
 
 ## Requires Fabrica
 

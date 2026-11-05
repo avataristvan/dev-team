@@ -5,8 +5,9 @@ Tests run deterministically instead of depending on the coder's habit: a duty th
 belongs in a mechanism that enforces it, not in an instruction the agent may forget.
 
 - Working directory: the `worktree:` line of the coder's last `[retro]` block if it names a git
-  checkout, else the event's `cwd`.
-- Test command: the first non-empty line of `.claude/test-command` in that checkout, else in its
+  checkout. No fallback to the event's `cwd`: a plan review (`worktree: none`) or a coder that
+  named no checkout runs nothing.
+- Test command: the first non-empty, non-comment line of `.claude/test-command` in that checkout, else in its
   main checkout (a fresh worktree has no untracked files).
 - Trusted roots: only checkouts below one of them run. `DEV_TEAM_TRUSTED_ROOTS` (paths separated
   by the OS path separator, `~` allowed) if set, else the session's project (`CLAUDE_PROJECT_DIR`).
@@ -76,23 +77,18 @@ def _work_dir(event: dict, roots: list[Path]) -> Path | None:
     """The checkout to test. The `worktree:` path comes from model output, so it is checked
     against the trusted roots before git ever runs in it, and the checkout git reports is
     checked again."""
-    candidates = []
     message = event.get("last_assistant_message")
-    if isinstance(message, str):
-        retro = message.rfind("[retro]")
-        match = _WORKTREE.search(message[retro:]) if retro >= 0 else None
-        if match:
-            candidates.append(Path(match.group(1)).expanduser())
-    cwd = event.get("cwd")
-    if isinstance(cwd, str):
-        candidates.append(Path(cwd))
-    for candidate in candidates:
-        if not _trusted(candidate, roots):
-            continue
-        checkout = _checkout(candidate)
-        if checkout and _trusted(checkout, roots):
-            return checkout
-    return None
+    if not isinstance(message, str):
+        return None
+    retro = message.rfind("[retro]")
+    match = _WORKTREE.search(message[retro:]) if retro >= 0 else None
+    if not match:
+        return None
+    candidate = Path(match.group(1)).expanduser()
+    if not candidate.is_absolute() or not _trusted(candidate, roots):
+        return None
+    checkout = _checkout(candidate)
+    return checkout if checkout and _trusted(checkout, roots) else None
 
 
 def _command(checkout: Path, roots: list[Path] | None) -> tuple[str, Path] | None:

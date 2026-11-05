@@ -50,4 +50,4 @@ Push only `main`, by name. Check `git fetch` and `git status -sb` against `origi
 
 ## Records
 
-Decisions and todos about the dev-team live in `~/workspace/ai-architecture/docs/records/dev-team/` (outside this repo). Ask the librarian with that area before changing a rule; record candidates go to the archivist via `/fabrica:reflect`.
+Decisions and BACKLOG items about the dev-team live in the area `~/workspace/ai-architecture/` (outside this repo), in `docs/records/` under the topics `workflow`, `plugin` and `general`. Ask the librarian with that area before changing a rule; record candidates go to the archivist via `/fabrica:reflect`.

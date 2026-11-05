@@ -23,16 +23,17 @@ Invoke the chunk-plan skill yourself: Skill(skill: \"dev-team:chunk-plan\", args
 description, including every scope decision already confirmed with the user>\").
 Follow its instructions completely end-to-end, including spawning and incorporating the
 mandatory tech-lead review yourself (you are not a fork, so you can call the Agent tool)
-before reporting back. Return the complete, tech-lead-approved plan (all chunks + spawn
-order) in full — do not compress it, this is what the orchestrator spawns coders from.
+before reporting back. Write the approved plan to chunks.md as the skill's "Output" section
+says. Return only its absolute path, one line per chunk
+(`Chunk N | name | model | parallel with | status`) and your [retro] block.
 ")
 ```
 
-The orchestrator only gets the finished, approved plan back; the file reading and the review loop stay out of its context.
+The orchestrator gets only the path and the chunk lines back, then reads the file itself. The file reading and the review loop stay out of its context.
 
 ## Memory (Fabrica)
 
-At this boundary follow the Fabrica handoff protocol (skill `fabrica:handoff-protocol`). Before you decompose, ask the librarian (mandatory, not optional: in evaluation, an agent that was not told to ask never asked on its own). If `fabrica:librarian` is not available, do not plan; report `blocked: Fabrica not installed` to the orchestrator, which tells the user that the dev-team requires the Fabrica plugin.
+At this boundary follow the Fabrica handoff protocol (skill `fabrica:handoff-protocol`). If `<area>/docs/plans/<slug>/brief.md` exists (written by the briefing interviewer), read it first: the plan must not contradict it, and its open questions belong in your librarian question. Before you decompose, ask the librarian (mandatory, not optional: in evaluation, an agent that was not told to ask never asked on its own). If `fabrica:librarian` is not available, do not plan; report `blocked: Fabrica not installed` to the orchestrator, which tells the user that the dev-team requires the Fabrica plugin.
 
 ```
 Agent(subagent_type="fabrica:librarian", model="haiku", prompt="""
@@ -43,8 +44,8 @@ Questions:
 """)
 ```
 
-It reads the catalogue (`docs/records/INDEX.md`), the entries and their edges, and judges instead of ranking by score. If the librarian names a decision or learning that the task itself would reverse or break: do not decompose and do not plan around it (no softened variant, no flag). Report only `blocked: contradicts <id> — <the recorded reason>` to the orchestrator; it asks the user. Knowledge that is only offered loses against an explicit order, so the stop has to be explicit. A merely related record is no contradiction.
-"Not documented" is a valid answer: plan without it. The `Relied on:` ids that actually shape the plan go into the affected chunk as **Decisions:** (id plus one line of why), so the coder can read them up in the area: the why travels with the chunk spec. Every id that draws a boundary (decisions, restricting todos, patterns that apply while working) also goes into the chunk as **Anchors:**; the review checks them one by one against the diff.
+It reads the catalogue (`docs/records/INDEX.md`), the entries and their edges, and judges instead of ranking by score. If the librarian names a decision or learning that the task itself would reverse or break: do not decompose and do not plan around it (no softened variant, no flag). Report only `blocked: contradicts <record path> — <the recorded reason>` to the orchestrator; it asks the user. Knowledge that is only offered loses against an explicit order, so the stop has to be explicit. A merely related record is no contradiction.
+"Not documented" is a valid answer: plan without it. The `Relied on:` records that actually shape the plan go into the affected chunk as **Decisions:** (record path, relative to the area, plus one line of why), so the coder can read them up in the area: the why travels with the chunk spec. Every record that draws a boundary (decisions, patterns that apply while working) also goes into the chunk as **Anchors:**; the review checks them one by one against the diff.
 
 ## Architecture awareness
 
@@ -70,12 +71,14 @@ If architecture prep is needed: **Chunk 0 always comes first.** It lays down the
 ```
 ### Chunk N: <Name>
 
+**Status:** planned   (orchestrator: running | done (merge <sha>) | blocked: <why>)
+**Base:** —   (orchestrator writes the sha at spawn)
 **Scope:** <Exactly what is changed/created — file paths>
 **Depends on:** Chunk X (or "none")
 **Parallelizable with:** Chunk Y (or "nothing")
 **Model:** opus | sonnet | haiku — <one-line reason per the model rubric below>
-**Decisions:** <ids the librarian named that bind this chunk, each with one line of why — or "none">
-**Anchors:** <every record id that draws a boundary — decisions, restricting todos, patterns that apply while working — each with one line of why, gathered from the librarian at planning time; extends Decisions — or "none">
+**Decisions:** <record paths the librarian named that bind this chunk, each with one line of why — or "none">
+**Anchors:** <every record path that draws a boundary — decisions, patterns that apply while working — each with one line of why, gathered from the librarian at planning time; extends Decisions — or "none">
 **Do not touch:** <files, directories or records this chunk must leave alone — or "none">
 
 **Implementation steps:**
@@ -99,7 +102,7 @@ When in doubt, the higher tier. The tech-lead review checks the model choice too
 
 ## Spawn plan at the end
 
-Close with a clear spawn plan:
+Close chunks.md with a clear spawn plan:
 
 ```
 ## Spawn Order
@@ -114,11 +117,56 @@ Parallel possible:
 **Reflect gate:** Between every chunk. The coder's [retro] (including its `reviewer_findings`/`applied`/`skipped` fields) surfaces path corrections, API surprises, and scope drift before they propagate into the next chunk.
 ```
 
+## Retro block (planner)
+
+Planning is a boundary too (Fabrica handoff protocol, §3). After the spawn order, end your answer with:
+
+```
+[retro]
+learned: <what surprised you while planning, or "nothing">
+blocked: <what got in the way, e.g. `blocked: contradicts <record path>`, or "nothing">
+next: <suggestion for the BACKLOG, or "nothing">
+records_consulted: <record paths the librarian named that shaped the plan, or "none">
+record_candidates: <plain text: what from planning or the tech-lead review should become a record, or "none">
+```
+
+The orchestrator collects these along with the coders' candidates for `/fabrica:reflect`. You never write records yourself.
+
+## Output
+
+The plan is a file, not a reply. Fabrica fixes the place; this skill fixes the content.
+
+- **Area:** the nearest ancestor of the target repo's main checkout that holds `docs/records/`.
+- **Slug:** the folder of the brief if there is one, otherwise a short kebab-case name of the feature.
+- **File:** `<area>/docs/plans/<slug>/chunks.md`, by absolute path in the main checkout (never in a worktree). If it already exists, ask the orchestrator instead of overwriting it.
+
+Layout of chunks.md:
+
+```
+# <Feature>
+
+Brief: <relative link to brief.md, or "none">
+Task: <the task as handed to you, incl. confirmed scope decisions>
+
+### Chunk 0: ...        (chunk format above, Status: planned, Base: —)
+### Chunk 1: ...
+
+## Spawn Order          (see above)
+
+## Tech-lead review
+<findings, and how each was worked in>
+
+## Record candidates
+<per chunk or for the plan as a whole, plain text, or "none">
+```
+
+Your reply to the orchestrator is only the absolute path, one line per chunk (`Chunk N | name | model | parallel with | status`) and your `[retro]` block.
+
 ## Tech-lead review (mandatory before every approval, not optional)
 
 The plan itself gets a second pair of eyes before a single coder is spawned: the same principle the coder's own review loop applies to finished code, applied here to the plan *before* implementation starts. This is not a judgment call to skip for a task that "is clear anyway": exactly that self-assessment was why this step used to run sometimes and sometimes not.
 
-1. Spawn `Agent(..., subagent_type="dev-team:the-coder")` with the tech-lead prompt template (below) and the complete plan (all chunks + spawn order) as context.
+1. Write the draft to chunks.md (see "Output"), then spawn `Agent(..., subagent_type="dev-team:the-coder", model="sonnet")` with the tech-lead prompt template (below) and the file's absolute path. Pass `model` explicitly: a tier above sonnet only if the plan touches the rubric's opus cases.
 2. The tech lead answers with concrete findings: chunk boundaries too large or unclear, missed dependencies, file overlaps in a planned parallelisation, an exit criterion that cannot be checked objectively, missing context a freshly spawned coder would need in order not to guess, or "The plan is executable as written".
 3. Work the findings directly into the plan (the tech lead does not replan from scratch): the same "apply findings, don't replan" discipline as the coder's review loop.
 4. Only then is the plan approved, and only then does the spawn order above begin.
@@ -133,7 +181,8 @@ Review this chunk plan as a technical lead, before any implementation starts. Yo
 not seen the planning process that produced it — read it cold, on its own terms.
 
 Task: <task description>
-Full plan (all chunks + spawn order): <complete plan text>
+Full plan (all chunks + spawn order): <absolute path to chunks.md> — read it; do not edit it.
+You review a plan and work in no worktree, so your [retro] says `worktree: none`.
 
 First, with no checklist in mind: if a coder picked up Chunk 1 right now, where
 concretely would they have to guess, hit something the plan didn't anticipate, or
@@ -159,8 +208,8 @@ For **parallel spawns**: several Agent tool calls in a single message.
 - Every chunk leaves the codebase in a compilable state
 - Exit criteria can be checked by someone else ("looks good" disqualifies)
 - Parallelisation only when there is really no data dependency (separate files preferred)
-- Every coder prompt core is self-contained: the coder needs no additional context
+- Every coder prompt core names the file and the chunk and carries the one-line why: with the chunk entry, the coder needs no additional context
 
 ## Arguments
 
-`$ARGUMENTS` holds the task description. Use it as the starting point, then explore the code yourself.
+`$ARGUMENTS` holds the task description, a slug, or the path of a `brief.md`. With a slug or brief, read `docs/plans/<slug>/brief.md` and plan from it. Use it as the starting point, then explore the code yourself. If `chunks.md` for that slug already exists, do not replan: return its path and chunk lines, because the orchestrator resumes at the first chunk whose Status is not `done`.
